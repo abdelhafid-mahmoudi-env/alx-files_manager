@@ -13,7 +13,7 @@ class UsersController {
 
     const hashedPassword = sha1(password);
     const result = await dbClient.db.collection('users').insertOne({ email, password: hashedPassword });
-    res.status(201).json({ id: result.insertedId, email });
+    return res.status(201).json({ id: result.insertedId, email });
   }
 
   static async getMe(req, res) {
@@ -26,7 +26,7 @@ class UsersController {
     const user = await dbClient.db.collection('users').findOne({ _id: userId });
     if (!user) return res.status(401).json({ error: 'Unauthorized' });
 
-    res.status(200).json({ id: user._id, email: user.email });
+    return res.status(200).json({ id: user._id, email: user.email });
   }
 }
 
