@@ -1,40 +1,45 @@
-/* eslint-disable import/no-named-as-default */
 import sha1 from 'sha1';
-import Queue from 'bull/lib/queue';
+import { ObjectId } from 'mongodb';
 import dbClient from '../utils/db';
 
-const userQueue = new Queue('email sending');
-
-export default class UsersController {
+class UsersController {
   static async postNew(req, res) {
-    const email = req.body ? req.body.email : null;
-    const password = req.body ? req.body.password : null;
+    const { email, password } = req.body;
 
     if (!email) {
-      res.status(400).json({ error: 'Missing email' });
-      return;
+      return res.status(400).json({ error: 'Missing email' });
     }
+
     if (!password) {
-      res.status(400).json({ error: 'Missing password' });
-      return;
+      return res.status(400).json({ error: 'Missing password' });
     }
-    const user = await (await dbClient.usersCollection()).findOne({ email });
 
-    if (user) {
-      res.status(400).json({ error: 'Already exist' });
-      return;
+    const userExists = await dbClient.db.collection('users').findOne({ email });
+    if (userExists) {
+      return res.status(400).json({ error: 'Already exist' });
     }
-    const insertionInfo = await (await dbClient.usersCollection())
-      .insertOne({ email, password: sha1(password) });
-    const userId = insertionInfo.insertedId.toString();
 
-    userQueue.add({ userId });
-    res.status(201).json({ email, id: userId });
+    const hashedPassword = sha1(password);
+    const newUser = await dbClient.db.collection('users').insertOne({ email, password: hashedPassword });
+
+    return res.status(201).json({ id: newUser.insertedId, email });
   }
 
   static async getMe(req, res) {
-    const { user } = req;
+    const token = req.headers['x-token'];
+    const userId = await redisClient.get(`auth_${token}`);
 
-    res.status(200).json({ email: user.email, id: user._id.toString() });
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const user = await dbClient.db.collection('users').findOne({ _id: ObjectId(userId) }, { projection: { password: 0 } });
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    return res.status(200).json(user);
   }
 }
+
+export default UsersController;
