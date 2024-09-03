@@ -1,52 +1,40 @@
-import { ObjectId } from 'mongodb';
+/* eslint-disable import/no-named-as-default */
 import sha1 from 'sha1';
-import Queue from 'bull';
+import Queue from 'bull/lib/queue';
 import dbClient from '../utils/db';
-import userUtils from '../utils/user';
 
-const userQueue = new Queue('userQueue');
+const userQueue = new Queue('email sending');
 
-class UsersController {
-  static async postNew(request, response) {
-    const { email, password } = request.body;
-    if (!email) return response.status(400).send({ error: 'Missing email' });
-    if (!password) { return response.status(400).send({ error: 'Missing password' }); }
-    const stringEmailExists = await dbClient.usersCollection.findOne({ email });
-    if (stringEmailExists) { return response.status(400).send({ error: 'Already exist' }); }
-    const sha1PasswordString = sha1(password);
-    let resultUser;
-    try {
-      resultUser = await dbClient.usersCollection.insertOne({
-        email,
-        password: sha1PasswordString,
-      });
-    } catch (err) {
-      await userQueue.add({});
-      return response.status(500).send({ error: 'Error creating user.' });
+export default class UsersController {
+  static async postNew(req, res) {
+    const email = req.body ? req.body.email : null;
+    const password = req.body ? req.body.password : null;
+
+    if (!email) {
+      res.status(400).json({ error: 'Missing email' });
+      return;
     }
-    const user = {
-      id: resultUser.insertedId,
-      email,
-    };
-    await userQueue.add({
-      userId: resultUser.insertedId.toString(),
-    });
-    return response.status(201).send(user);
+    if (!password) {
+      res.status(400).json({ error: 'Missing password' });
+      return;
+    }
+    const user = await (await dbClient.usersCollection()).findOne({ email });
+
+    if (user) {
+      res.status(400).json({ error: 'Already exist' });
+      return;
+    }
+    const insertionInfo = await (await dbClient.usersCollection())
+      .insertOne({ email, password: sha1(password) });
+    const userId = insertionInfo.insertedId.toString();
+
+    userQueue.add({ userId });
+    res.status(201).json({ email, id: userId });
   }
 
-  static async getMe(request, response) {
-    const { userId } = await userUtils.getUserIdAndKey(request);
-    const userData = await userUtils.getUser({
-      _id: ObjectId(userId),
-    });
+  static async getMe(req, res) {
+    const { user } = req;
 
-    if (!userData) return response.status(401).send({ error: 'Unauthorized' });
-    const process = { id: userData._id, ...userData };
-    delete process._id;
-    delete process.password;
-
-    return response.status(200).send(process);
+    res.status(200).json({ email: user.email, id: user._id.toString() });
   }
 }
-
-export default UsersController;
