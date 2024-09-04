@@ -3,18 +3,18 @@ import { existsSync, mkdir, writeFile } from 'fs';
 import { ObjectID } from 'mongodb';
 import mime from 'mime-types';
 import { v4 as uuidv4 } from 'uuid';
-import db from '../utils/db';
-import redis from '../utils/redis';
+import dbClient from '../utils/db';
+import redisClient from '../utils/redis';
 
 class FilesController {
   static async postUpload(request, response) {
     const access_token = request.header('X-Token');
     const keystring = `auth_${access_token}`;
-    const userId = await redis.get(keystring);
+    const userId = await redisClient.get(keystring);
     if (!userId) {
       return response.status(401).json({ error: 'Unauthorized' });
     }
-    const user = await db.getUser({ _id: new ObjectID(userId) });
+    const user = await dbClient.getUser({ _id: new ObjectID(userId) });
     if (!user) {
       return response.status(401).json({ error: 'Unauthorized' });
     }
@@ -34,7 +34,7 @@ class FilesController {
     }
     const { parentId = 0 } = request.body;
     if (parentId) {
-      const file = await db.getFile({ _id: new ObjectID(parentId) });
+      const file = await dbClient.getFile({ _id: new ObjectID(parentId) });
       if (!file) {
         return response.status(400).json({ error: 'Parent not found' });
       }
@@ -53,7 +53,7 @@ class FilesController {
 
     if (type === 'folder') {
       try {
-        const resultDbId = await db.createFile(saveToFile);
+        const resultDbId = await dbClient.createFile(saveToFile);
         saveToFile.id = resultDbId;
         saveToFile.userId = user._id.toString();
         saveToFile.parentId = saveToFile.parentId === '0' ? 0 : saveToFile.parentId.toString();
@@ -81,7 +81,7 @@ class FilesController {
     });
     saveToFile.localPath = pathFile;
     try {
-      const resultDbId = await db.createFile(saveToFile);
+      const resultDbId = await dbClient.createFile(saveToFile);
       delete saveToFile.localPath;
       saveToFile.id = resultDbId;
       saveToFile.userId = user._id.toString();
@@ -101,13 +101,13 @@ class FilesController {
   static async getShow(request, response) {
     const access_token = request.header('X-Token');
     const keystring = `auth_${access_token}`;
-    const userId = await redis.get(keystring);
+    const userId = await redisClient.get(keystring);
     if (!userId) {
       return response.status(401).json({ error: 'Unauthorized' });
     }
 
     const { id } = request.params;
-    const file = await db.getFile({ _id: new ObjectID(id), userId: new ObjectID(userId) });
+    const file = await dbClient.getFile({ _id: new ObjectID(id), userId: new ObjectID(userId) });
 
     if (!file) {
       return response.status(404).json({ error: 'Not found' });
@@ -121,7 +121,7 @@ class FilesController {
   static async getIndex(request, response) {
     const access_token = request.header('X-Token');
     const keystring = `auth_${access_token}`;
-    const userId = await redis.get(keystring);
+    const userId = await redisClient.get(keystring);
     if (!userId) {
       return response.status(401).json({ error: 'Unauthorized' });
     }
@@ -133,7 +133,7 @@ class FilesController {
     } else {
       filter_all = { userId: new ObjectID(userId), parentId: new ObjectID(parentId) };
     }
-    return db.db.collection('files').aggregate(
+    return dbClient.db.collection('files').aggregate(
       [
         { $match: filter_all },
         {
@@ -163,13 +163,13 @@ class FilesController {
   static async putPublish(request, response) {
     const token = request.header('X-Token');
     const key = `auth_${token}`;
-    const userId = await redis.get(key);
+    const userId = await redisClient.get(key);
     if (!userId) {
       return response.status(401).json({ error: 'Unauthorized' });
     }
 
     const { id } = request.params;
-    const file = await db.db.collection('files').findOneAndUpdate(
+    const file = await dbClient.db.collection('files').findOneAndUpdate(
       { _id: new ObjectID(id), userId: new ObjectID(userId) },
       { $set: { isPublic: true } },
       { returnOriginal: false },
@@ -187,13 +187,13 @@ class FilesController {
   static async putUnpublish(request, response) {
     const access_token = request.header('X-Token');
     const keystring = `auth_${access_token}`;
-    const userId = await redis.get(keystring);
+    const userId = await redisClient.get(keystring);
     if (!userId) {
       return response.status(401).json({ error: 'Unauthorized' });
     }
 
     const { id } = request.params;
-    const file = await db.db.collection('files').findOneAndUpdate(
+    const file = await dbClient.db.collection('files').findOneAndUpdate(
       { _id: new ObjectID(id), userId: new ObjectID(userId) },
       { $set: { isPublic: false } },
       { returnOriginal: false },
@@ -211,11 +211,11 @@ class FilesController {
   static async getFile(request, response) {
     const access_token = request.header('X-Token');
     const keystring = `auth_${access_token}`;
-    const userId = await redis.get(keystring);
+    const userId = await redisClient.get(keystring);
 
     const { id } = request.params;
     const { size = 0 } = request.query;
-    const file = await db.getFile({ _id: new ObjectID(id) });
+    const file = await dbClient.getFile({ _id: new ObjectID(id) });
     if (!file) {
       console.error('File was not found!!!');
       return response.status(404).json({ error: 'Not found' });

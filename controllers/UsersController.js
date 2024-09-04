@@ -1,7 +1,7 @@
 import sha1 from 'sha1';
 import { ObjectID } from 'mongodb';
-import db from '../utils/db';
-import redis from '../utils/redis';
+import dbClient from '../utils/db';
+import redisClient from '../utils/redis';
 
 class UsersController {
   static postNew(request, response) {
@@ -18,11 +18,11 @@ class UsersController {
     return (async (userEmail, userPassword) => {
       let _id;
       try {
-        const user = await db.getUser({ email: userEmail });
+        const user = await dbClient.getUser({ email: userEmail });
         if (user) {
           return response.status(400).json({ error: 'Already exist' });
         }
-        _id = await db.createUser({ email: userEmail, password: sha1(userPassword) });
+        _id = await dbClient.createUser({ email: userEmail, password: sha1(userPassword) });
       } catch (error) {
         console.log(error);
         return response.status(501);
@@ -34,11 +34,11 @@ class UsersController {
   static async getMe(request, response) {
     const access_token = request.header('X-Token');
     const keystring = `auth_${access_token}`;
-    const userIdString = await redis.get(keystring);
+    const userIdString = await redisClient.get(keystring);
     if (!userIdString) {
       return response.status(401).json({ error: 'Unauthorized' });
     }
-    const user = await db.getUser({ _id: new ObjectID(userIdString) });
+    const user = await dbClient.getUser({ _id: new ObjectID(userIdString) });
     if (!user) {
       return response.status(401).json({ error: 'Unauthorized' });
     }
