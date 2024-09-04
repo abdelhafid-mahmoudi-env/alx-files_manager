@@ -4,19 +4,19 @@ import AuthController from '../controllers/AuthController';
 import FilesController from '../controllers/FilesController';
 import UsersController from '../controllers/UsersController';
 
-const navigator = Router();
+const router = Router();
 
-navigator.get('/status', AppController.getStatus);
-navigator.get('/stats', AppController.getStats);
-navigator.post('/users', UsersController.postNew);
-navigator.get('/users/me', UsersController.getMe);
-navigator.get('/connect', AuthController.getConnect);
-navigator.get('/disconnect', AuthController.getDisconnect);
-navigator.post('/files', FilesController.postUpload);
-navigator.get('/files/:id', FilesController.getShow);
-navigator.get('/files', FilesController.getIndex);
-navigator.put('/files/:id/publish', FilesController.putPublish);
-navigator.put('/files/:id/unpublish', FilesController.putUnpublish);
-navigator.get('/files/:id/data', FilesController.getFile);
+router.get('/status', AppController.getStatus);
+router.get('/stats', AppController.getStats);
+router.post('/users', UsersController.postNew);
+router.get('/users/me', UsersController.getMe);
+router.get('/connect', AuthController.getConnect);
+router.get('/disconnect', AuthController.getDisconnect);
+router.post('/files', FilesController.postUpload);
+router.get('/files/:id', FilesController.getShow);
+router.get('/files', FilesController.getIndex);
+router.put('/files/:id/publish', FilesController.putPublish);
+router.put('/files/:id/unpublish', FilesController.putUnpublish);
+router.get('/files/:id/data', FilesController.getFile);
 
-module.exports = navigator;
+module.exports = router;
