@@ -8,9 +8,9 @@ import redisClient from '../utils/redis';
 
 class FilesController {
   static async postUpload(request, response) {
-    const access_token = request.header('X-Token');
-    const keystring = `auth_${access_token}`;
-    const userId = await redisClient.get(keystring);
+    const token = request.header('X-Token');
+    const key = `auth_${token}`;
+    const userId = await redisClient.get(key);
     if (!userId) {
       return response.status(401).json({ error: 'Unauthorized' });
     }
@@ -43,7 +43,7 @@ class FilesController {
       }
     }
 
-    const saveToFile = {
+    const saveFile = {
       userId: user._id,
       name,
       type,
@@ -53,25 +53,25 @@ class FilesController {
 
     if (type === 'folder') {
       try {
-        const resultDbId = await dbClient.createFile(saveToFile);
-        saveToFile.id = resultDbId;
-        saveToFile.userId = user._id.toString();
-        saveToFile.parentId = saveToFile.parentId === '0' ? 0 : saveToFile.parentId.toString();
-        delete saveToFile._id;
-        return response.status(201).json(saveToFile);
+        const resultId = await dbClient.createFile(saveFile);
+        saveFile.id = resultId;
+        saveFile.userId = user._id.toString();
+        saveFile.parentId = saveFile.parentId === '0' ? 0 : saveFile.parentId.toString();
+        delete saveFile._id;
+        return response.status(201).json(saveFile);
       } catch (e) {
         console.error(e.message);
         return response.status(500).json({ msg: 'Internal server error occured.' });
       }
     }
-    const pathFolder = process.env.FOLDER_PATH || '/tmp/files_manager';
-    const pathFile = `${pathFolder}/${uuidv4()}`;
-    const buffer = Buffer.from(data, 'base64');
-    mkdir(pathFolder, { recursive: true }, (err) => {
+    const folderPath = process.env.FOLDER_PATH || '/tmp/files_manager';
+    const filePath = `${folderPath}/${uuidv4()}`;
+    const buff = Buffer.from(data, 'base64');
+    mkdir(folderPath, { recursive: true }, (err) => {
       if (err) {
         return response.status(400).json({ error: err.message });
       }
-      writeFile(pathFile, buffer, (err) => {
+      writeFile(filePath, buff, (err) => {
         if (err) {
           return response.status(400).json({ error: err.message });
         }
@@ -79,29 +79,29 @@ class FilesController {
       });
       return true;
     });
-    saveToFile.localPath = pathFile;
+    saveFile.localPath = filePath;
     try {
-      const resultDbId = await dbClient.createFile(saveToFile);
-      delete saveToFile.localPath;
-      saveToFile.id = resultDbId;
-      saveToFile.userId = user._id.toString();
-      saveToFile.parentId = saveToFile.parentId === '0' ? 0 : saveToFile.parentId.toString();
+      const resultId = await dbClient.createFile(saveFile);
+      delete saveFile.localPath;
+      saveFile.id = resultId;
+      saveFile.userId = user._id.toString();
+      saveFile.parentId = saveFile.parentId === '0' ? 0 : saveFile.parentId.toString();
     } catch (e) {
       console.error(e.message);
       return response.status(500).json({ msg: 'Internal server error occured.' });
     }
-    delete saveToFile._id;
+    delete saveFile._id;
     if (type === 'image') {
       const fileQueue = new Queue('fileQueue', 'redis://127.0.0.1:6379');
-      fileQueue.add({ fileId: saveToFile.id, userId: saveToFile.userId });
+      fileQueue.add({ fileId: saveFile.id, userId: saveFile.userId });
     }
-    return response.status(201).json(saveToFile);
+    return response.status(201).json(saveFile);
   }
 
   static async getShow(request, response) {
-    const access_token = request.header('X-Token');
-    const keystring = `auth_${access_token}`;
-    const userId = await redisClient.get(keystring);
+    const token = request.header('X-Token');
+    const key = `auth_${token}`;
+    const userId = await redisClient.get(key);
     if (!userId) {
       return response.status(401).json({ error: 'Unauthorized' });
     }
@@ -119,23 +119,23 @@ class FilesController {
   }
 
   static async getIndex(request, response) {
-    const access_token = request.header('X-Token');
-    const keystring = `auth_${access_token}`;
-    const userId = await redisClient.get(keystring);
+    const token = request.header('X-Token');
+    const key = `auth_${token}`;
+    const userId = await redisClient.get(key);
     if (!userId) {
       return response.status(401).json({ error: 'Unauthorized' });
     }
 
     const { parentId = 0, page = 0 } = request.query;
-    let filter_all;
+    let filter;
     if (!parentId) {
-      filter_all = { userId: new ObjectID(userId) };
+      filter = { userId: new ObjectID(userId) };
     } else {
-      filter_all = { userId: new ObjectID(userId), parentId: new ObjectID(parentId) };
+      filter = { userId: new ObjectID(userId), parentId: new ObjectID(parentId) };
     }
     return dbClient.db.collection('files').aggregate(
       [
-        { $match: filter_all },
+        { $match: filter },
         {
           $facet: {
             data: [{ $skip: 20 * +page }, { $limit: 20 }],
@@ -185,9 +185,9 @@ class FilesController {
   }
 
   static async putUnpublish(request, response) {
-    const access_token = request.header('X-Token');
-    const keystring = `auth_${access_token}`;
-    const userId = await redisClient.get(keystring);
+    const token = request.header('X-Token');
+    const key = `auth_${token}`;
+    const userId = await redisClient.get(key);
     if (!userId) {
       return response.status(401).json({ error: 'Unauthorized' });
     }
@@ -209,9 +209,9 @@ class FilesController {
   }
 
   static async getFile(request, response) {
-    const access_token = request.header('X-Token');
-    const keystring = `auth_${access_token}`;
-    const userId = await redisClient.get(keystring);
+    const token = request.header('X-Token');
+    const key = `auth_${token}`;
+    const userId = await redisClient.get(key);
 
     const { id } = request.params;
     const { size = 0 } = request.query;

@@ -15,14 +15,14 @@ class UsersController {
       return response.status(400).json({ error: 'Missing password' });
     }
 
-    return (async (userEmail, userPassword) => {
+    return (async (userEmail, pwd) => {
       let _id;
       try {
         const user = await dbClient.getUser({ email: userEmail });
         if (user) {
           return response.status(400).json({ error: 'Already exist' });
         }
-        _id = await dbClient.createUser({ email: userEmail, password: sha1(userPassword) });
+        _id = await dbClient.createUser({ email: userEmail, password: sha1(pwd) });
       } catch (error) {
         console.log(error);
         return response.status(501);
@@ -32,17 +32,17 @@ class UsersController {
   }
 
   static async getMe(request, response) {
-    const access_token = request.header('X-Token');
-    const keystring = `auth_${access_token}`;
-    const userIdString = await redisClient.get(keystring);
-    if (!userIdString) {
+    const token = request.header('X-Token');
+    const key = `auth_${token}`;
+    const userId = await redisClient.get(key);
+    if (!userId) {
       return response.status(401).json({ error: 'Unauthorized' });
     }
-    const user = await dbClient.getUser({ _id: new ObjectID(userIdString) });
+    const user = await dbClient.getUser({ _id: new ObjectID(userId) });
     if (!user) {
       return response.status(401).json({ error: 'Unauthorized' });
     }
-    return response.status(200).json({ id: userIdString, email: user.email });
+    return response.status(200).json({ id: userId, email: user.email });
   }
 }
 
