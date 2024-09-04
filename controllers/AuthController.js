@@ -1,41 +1,41 @@
 import sha1 from 'sha1';
 import { v4 as uuidv4 } from 'uuid';
-import dbClient from '../utils/db';
-import redisClient from '../utils/redis';
+import db from '../utils/db';
+import redis from '../utils/redis';
 
 class AuthController {
   static getConnect(request, response) {
-    const authValue = request.header('Authorization');
-    const encodedCredentials = authValue.split(' ')[1];
-    const buff = Buffer.from(encodedCredentials, 'base64');
-    const decodedCredentials = buff.toString('ascii');
+    const myauthValue = request.header('Authorization');
+    const encodedCredentialsString = myauthValue.split(' ')[1];
+    const buffer = Buffer.from(encodedCredentialsString, 'base64');
+    const decodedCredentialsString = buffer.toString('ascii');
 
-    const [email, pwd] = decodedCredentials.split(':');
+    const [email, password] = decodedCredentialsString.split(':');
 
-    if (!email || !pwd) {
+    if (!email || !password) {
       return response.status(401).json({ error: 'Unauthorized' });
     }
 
-    return (async (userEmail, userPwd) => {
-      const user = await dbClient.getUser({ email: userEmail, password: sha1(userPwd) });
+    return (async (userEmail, userPassword) => {
+      const user = await db.getUser({ email: userEmail, password: sha1(userPassword) });
       if (!user) {
         return response.status(401).json({ error: 'Unauthorized' });
       }
-      const token = uuidv4();
-      const key = `auth_${token}`;
-      await redisClient.set(key, user._id.toString(), 86400);
+      const access_token = uuidv4();
+      const key = `auth_${access_token}`;
+      await redis.set(key, user._id.toString(), 86400);
       return response.status(200).json({ token });
-    })(email, pwd);
+    })(email, password);
   }
 
   static async getDisconnect(request, response) {
-    const token = request.header('X-Token');
-    const key = `auth_${token}`;
-    const userId = await redisClient.get(key);
+    const access_token = request.header('X-Token');
+    const keystring = `auth_${access_token}`;
+    const userId = await redis.get(keystring);
     if (!userId) {
       return response.status(401).json({ error: 'Unauthorized' });
     }
-    await redisClient.del(key);
+    await redis.del(keystring);
     return response.status(204).end();
   }
 }

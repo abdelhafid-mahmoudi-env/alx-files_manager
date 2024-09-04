@@ -1,16 +1,16 @@
 import { MongoClient } from 'mongodb';
 
-const hostname = process.env.DB_HOST || 'localhost';
-const port = process.env.DB_PORT || '27017';
-const db = process.env.DB_DATABASE || 'files_manager';
+const HOSTNAME = process.env.DB_HOST || 'localhost';
+const PORT = process.env.DB_PORT || '27017';
+const DB = process.env.DB_DATABASE || 'files_manager';
 
-const url = `mongodb://${hostname}:${port}`;
+const url = `mongodb://${HOSTNAME}:${PORT}`;
 
 class DBClient {
   constructor() {
     this.client = new MongoClient(url, { useUnifiedTopology: true });
     this.client.connect().then(() => {
-      this.db = this.client.db(db);
+      this.db = this.client.db(DB);
     }).catch((err) => {
       console.log(`Mongodb client not connected to the database: ${err}`);
     });
@@ -51,5 +51,5 @@ class DBClient {
   }
 }
 
-const dbClient = new DBClient();
-module.exports = dbClient;
+const client = new DBClient();
+module.exports = client;

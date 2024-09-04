@@ -2,7 +2,7 @@ import Queue from 'bull';
 import { writeFile } from 'fs';
 import { ObjectID } from 'mongodb';
 const imageThumbnail = require('image-thumbnail');
-import dbClient from './utils/db';
+import db from './utils/db';
 
 const fileQueue = new Queue('fileQueue', 'redis://127.0.0.1:6379');
 
@@ -13,7 +13,7 @@ fileQueue.process(async (job, done) => {
   if (!Object.hasOwn(job.data, 'userId')) {
     throw new Error('Missing userId');
   }
-  const file = await dbClient.getFile({
+  const file = await db.getFile({
     _id: new ObjectID(job.data.fileId),
     userId: new ObjectID(job.data.userId),
   });

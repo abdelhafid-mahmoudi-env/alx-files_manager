@@ -3,18 +3,18 @@ import { existsSync, mkdir, writeFile } from 'fs';
 import { ObjectID } from 'mongodb';
 import mime from 'mime-types';
 import { v4 as uuidv4 } from 'uuid';
-import dbClient from '../utils/db';
-import redisClient from '../utils/redis';
+import db from '../utils/db';
+import redis from '../utils/redis';
 
 class FilesController {
   static async postUpload(request, response) {
-    const token = request.header('X-Token');
-    const key = `auth_${token}`;
-    const userId = await redisClient.get(key);
+    const access_token = request.header('X-Token');
+    const keystring = `auth_${access_token}`;
+    const userId = await redis.get(keystring);
     if (!userId) {
       return response.status(401).json({ error: 'Unauthorized' });
     }
-    const user = await dbClient.getUser({ _id: new ObjectID(userId) });
+    const user = await db.getUser({ _id: new ObjectID(userId) });
     if (!user) {
       return response.status(401).json({ error: 'Unauthorized' });
     }
@@ -34,7 +34,7 @@ class FilesController {
     }
     const { parentId = 0 } = request.body;
     if (parentId) {
-      const file = await dbClient.getFile({ _id: new ObjectID(parentId) });
+      const file = await db.getFile({ _id: new ObjectID(parentId) });
       if (!file) {
         return response.status(400).json({ error: 'Parent not found' });
       }
@@ -43,7 +43,7 @@ class FilesController {
       }
     }
 
-    const saveFile = {
+    const saveToFile = {
       userId: user._id,
       name,
       type,
@@ -53,25 +53,25 @@ class FilesController {
 
     if (type === 'folder') {
       try {
-        const resultId = await dbClient.createFile(saveFile);
-        saveFile.id = resultId;
-        saveFile.userId = user._id.toString();
-        saveFile.parentId = saveFile.parentId === '0' ? 0 : saveFile.parentId.toString();
-        delete saveFile._id;
-        return response.status(201).json(saveFile);
+        const resultDbId = await db.createFile(saveToFile);
+        saveToFile.id = resultDbId;
+        saveToFile.userId = user._id.toString();
+        saveToFile.parentId = saveToFile.parentId === '0' ? 0 : saveToFile.parentId.toString();
+        delete saveToFile._id;
+        return response.status(201).json(saveToFile);
       } catch (e) {
         console.error(e.message);
         return response.status(500).json({ msg: 'Internal server error occured.' });
       }
     }
-    const folderPath = process.env.FOLDER_PATH || '/tmp/files_manager';
-    const filePath = `${folderPath}/${uuidv4()}`;
-    const buff = Buffer.from(data, 'base64');
-    mkdir(folderPath, { recursive: true }, (err) => {
+    const pathFolder = process.env.FOLDER_PATH || '/tmp/files_manager';
+    const pathFile = `${pathFolder}/${uuidv4()}`;
+    const buffer = Buffer.from(data, 'base64');
+    mkdir(pathFolder, { recursive: true }, (err) => {
       if (err) {
         return response.status(400).json({ error: err.message });
       }
-      writeFile(filePath, buff, (err) => {
+      writeFile(pathFile, buffer, (err) => {
         if (err) {
           return response.status(400).json({ error: err.message });
         }
@@ -79,35 +79,35 @@ class FilesController {
       });
       return true;
     });
-    saveFile.localPath = filePath;
+    saveToFile.localPath = pathFile;
     try {
-      const resultId = await dbClient.createFile(saveFile);
-      delete saveFile.localPath;
-      saveFile.id = resultId;
-      saveFile.userId = user._id.toString();
-      saveFile.parentId = saveFile.parentId === '0' ? 0 : saveFile.parentId.toString();
+      const resultDbId = await db.createFile(saveToFile);
+      delete saveToFile.localPath;
+      saveToFile.id = resultDbId;
+      saveToFile.userId = user._id.toString();
+      saveToFile.parentId = saveToFile.parentId === '0' ? 0 : saveToFile.parentId.toString();
     } catch (e) {
       console.error(e.message);
       return response.status(500).json({ msg: 'Internal server error occured.' });
     }
-    delete saveFile._id;
+    delete saveToFile._id;
     if (type === 'image') {
       const fileQueue = new Queue('fileQueue', 'redis://127.0.0.1:6379');
-      fileQueue.add({ fileId: saveFile.id, userId: saveFile.userId });
+      fileQueue.add({ fileId: saveToFile.id, userId: saveToFile.userId });
     }
-    return response.status(201).json(saveFile);
+    return response.status(201).json(saveToFile);
   }
 
   static async getShow(request, response) {
-    const token = request.header('X-Token');
-    const key = `auth_${token}`;
-    const userId = await redisClient.get(key);
+    const access_token = request.header('X-Token');
+    const keystring = `auth_${access_token}`;
+    const userId = await redis.get(keystring);
     if (!userId) {
       return response.status(401).json({ error: 'Unauthorized' });
     }
 
     const { id } = request.params;
-    const file = await dbClient.getFile({ _id: new ObjectID(id), userId: new ObjectID(userId) });
+    const file = await db.getFile({ _id: new ObjectID(id), userId: new ObjectID(userId) });
 
     if (!file) {
       return response.status(404).json({ error: 'Not found' });
@@ -119,23 +119,23 @@ class FilesController {
   }
 
   static async getIndex(request, response) {
-    const token = request.header('X-Token');
-    const key = `auth_${token}`;
-    const userId = await redisClient.get(key);
+    const access_token = request.header('X-Token');
+    const keystring = `auth_${access_token}`;
+    const userId = await redis.get(keystring);
     if (!userId) {
       return response.status(401).json({ error: 'Unauthorized' });
     }
 
     const { parentId = 0, page = 0 } = request.query;
-    let filter;
+    let filter_all;
     if (!parentId) {
-      filter = { userId: new ObjectID(userId) };
+      filter_all = { userId: new ObjectID(userId) };
     } else {
-      filter = { userId: new ObjectID(userId), parentId: new ObjectID(parentId) };
+      filter_all = { userId: new ObjectID(userId), parentId: new ObjectID(parentId) };
     }
-    return dbClient.db.collection('files').aggregate(
+    return db.db.collection('files').aggregate(
       [
-        { $match: filter },
+        { $match: filter_all },
         {
           $facet: {
             data: [{ $skip: 20 * +page }, { $limit: 20 }],
@@ -163,13 +163,13 @@ class FilesController {
   static async putPublish(request, response) {
     const token = request.header('X-Token');
     const key = `auth_${token}`;
-    const userId = await redisClient.get(key);
+    const userId = await redis.get(key);
     if (!userId) {
       return response.status(401).json({ error: 'Unauthorized' });
     }
 
     const { id } = request.params;
-    const file = await dbClient.db.collection('files').findOneAndUpdate(
+    const file = await db.db.collection('files').findOneAndUpdate(
       { _id: new ObjectID(id), userId: new ObjectID(userId) },
       { $set: { isPublic: true } },
       { returnOriginal: false },
@@ -185,15 +185,15 @@ class FilesController {
   }
 
   static async putUnpublish(request, response) {
-    const token = request.header('X-Token');
-    const key = `auth_${token}`;
-    const userId = await redisClient.get(key);
+    const access_token = request.header('X-Token');
+    const keystring = `auth_${access_token}`;
+    const userId = await redis.get(keystring);
     if (!userId) {
       return response.status(401).json({ error: 'Unauthorized' });
     }
 
     const { id } = request.params;
-    const file = await dbClient.db.collection('files').findOneAndUpdate(
+    const file = await db.db.collection('files').findOneAndUpdate(
       { _id: new ObjectID(id), userId: new ObjectID(userId) },
       { $set: { isPublic: false } },
       { returnOriginal: false },
@@ -209,13 +209,13 @@ class FilesController {
   }
 
   static async getFile(request, response) {
-    const token = request.header('X-Token');
-    const key = `auth_${token}`;
-    const userId = await redisClient.get(key);
+    const access_token = request.header('X-Token');
+    const keystring = `auth_${access_token}`;
+    const userId = await redis.get(keystring);
 
     const { id } = request.params;
     const { size = 0 } = request.query;
-    const file = await dbClient.getFile({ _id: new ObjectID(id) });
+    const file = await db.getFile({ _id: new ObjectID(id) });
     if (!file) {
       console.error('File was not found!!!');
       return response.status(404).json({ error: 'Not found' });
